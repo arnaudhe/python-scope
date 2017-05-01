@@ -1,0 +1,25 @@
+{
+    "source" : {
+        "type" : "udp",
+        "params" : {
+            "port" : 9000
+        }
+    },
+    "channels" : {
+        "triangle_1" : {
+            "unit" : "su" 
+        },
+        "triangle_2" : {
+            "unit" : "su" 
+        },
+        "square" : {
+            "unit" : "su"
+        },
+        "square2" : {
+            "unit" : "su"
+        }
+    },
+    "plot" : {
+        "depth" : 50
+    }
+}

@@ -16,10 +16,11 @@ class DataReader(threading.Thread):
 
     stop_thread = threading.Event()
 
-    def __init__(self):
-        threading.Thread.__init__(self)                 # Call constructor of parent
-        self.data_buff_size = 500                      # Buffer size
-        self.data = numpy.zeros(self.data_buff_size)    # Data buffer
+    def __init__(self, dimension, depth = 1000):
+        threading.Thread.__init__(self)                     # Call constructor of parent
+        self.data_buff_size = depth                         # Buffer size
+        self.dimension = dimension
+        self.data = numpy.zeros((self.data_buff_size, self.dimension))   # Data buffer
 
     def run(self):
 
@@ -28,13 +29,17 @@ class DataReader(threading.Thread):
         while not self.stop_thread.isSet() :
             data = self.read()                          # Read incoming data
             try:
-                val = float(data)
+                values = data.split(';')
+                if (len(values) == self.dimension):
+                    values = [float(i) for i in values]
+                else:
+                    raise Exception("Bad input length")
             except Exception, e:
                 print "input data error"
             
             lock.acquire()
-            self.data = numpy.roll(self.data,-1)
-            self.data[-1] = val
+            self.data = numpy.roll(self.data, -1, axis=0)
+            self.data[-1, :] = numpy.array(values).T
             lock.release()
 
         self.close()
@@ -44,8 +49,8 @@ class DataReader(threading.Thread):
 
 class DataReaderUdp(DataReader):
 
-    def __init__(self, port):
-        super(DataReaderUdp, self).__init__()
+    def __init__(self, port, dimension, depth = 1000):
+        super(DataReaderUdp, self).__init__(dimension, depth)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind(('', port))
         print 'Socket bound on port {}'.format(port)
@@ -61,8 +66,8 @@ class DataReaderUdp(DataReader):
 
 class DataReaderSerial(DataReader):
 
-    def __init__(self, port, baudrate):
-        super(DataReaderSerial, self).__init__()
+    def __init__(self, port, baudrate, dimension, depth = 1000):
+        super(DataReaderSerial, self).__init__(dimension, depth)
         self.ser = serial.Serial(port, baudrate)  # open serial port
         print 'Serial port {} opened'.format(port)
         self.start()
@@ -101,11 +106,19 @@ class VerticalGradient():
 
 
 class Oscilloscope():
+
+    RED     = (229, 32,  57)
+    ORANGE  = (255, 154, 4)
+    BLUE    = (0,   162, 232)
+    GREEN   = (102, 177, 33)
+
+    colors  = [RED, BLUE, ORANGE, GREEN, RED, BLUE, ORANGE, GREEN, RED, BLUE, ORANGE, GREEN]
     
-    def __init__(self, data_reader):
+    def __init__(self, data_reader, dimension):
         self.screen      = pygame.display.set_mode((800, 600))
         self.clock       = pygame.time.Clock()
         self.data_reader = data_reader
+        self.dimension   = dimension
         self.run()
 
     def generate_gradient(self, from_color, to_color, height, width):
@@ -119,15 +132,10 @@ class Oscilloscope():
             )
         return numpy.dstack(channels)
         
-    def plot(self, x, y, xmin, xmax, ymin, ymax):
+    def plot(self, x, y, xmin, xmax, ymin, ymax, color):
         w, h = self.screen.get_size()
         x = numpy.array(x)
         y = numpy.array(y)
-
-        RED     = (229, 32, 57)
-        ORANGE  = (255, 154, 4)
-        BLUE    = (0, 162, 232)
-        GREEN   = (102, 177, 33)
         
         #Scale data
         xspan = abs(xmax-xmin)
@@ -148,8 +156,8 @@ class Oscilloscope():
             
         #Plot data
         for i in range(len(xp)-1):
-            pygame.draw.line(self.screen, RED, (int(xp[i]),   int(yp[i])), 
-                                               (int(xp[i+1]), int(yp[i+1])), 2)
+            pygame.draw.line(self.screen, color, (int(xp[i]),   int(yp[i])), 
+                                                 (int(xp[i+1]), int(yp[i+1])), 2)
 
     def run(self):
         
@@ -176,12 +184,13 @@ class Oscilloscope():
             gradient.update()
 
             # Plot current buffer
-            if not hold:
-                lock.acquire()
-                x = numpy.arange(data_buff_size)
-                y = self.data_reader.data
-                lock.release()
-            self.plot(x,y, 0, data_buff_size, 0, 10)
+            for i in range(self.dimension):
+                if not hold:
+                    lock.acquire()
+                    x = numpy.arange(data_buff_size)
+                    y = self.data_reader.data[:, i]
+                    lock.release()
+                self.plot(x, y, 0, data_buff_size, 0, 10, self.colors[i])
 
             # Display fps
             text = font.render("%d fps"%self.clock.get_fps(), 1, (200, 200, 200))
@@ -199,11 +208,16 @@ if (len(sys.argv) < 2):
 with open(sys.argv[1], 'r') as config_file:
     config = json.loads(config_file.read())
 
-if config['source']['type'] == 'udp':
-    data_reader = DataReaderUdp(config['source']['params']['port'])
-elif config['source']['type'] == 'serial':
-    data_reader = DataReaderUdp(config['source']['params']['port'], config['source']['params']['baudrate'])
+data_source_type   = config['source']['type']
+data_source_params = config['source']['params']
+channels_len       = len(config['channels'])
+plot_depth         = config['plot']['depth']
+
+if data_source_type == 'udp':
+    data_reader = DataReaderUdp(data_source_params['port'], channels_len, plot_depth)
+elif data_source_type == 'serial':
+    data_reader = DataReaderUdp(data_source_params['port'], data_source_params['baudrate'], channels_len, plot_depth)
 else:
     sys.exit("Unknown source type")
 
-osc = Oscilloscope(data_reader)
+osc = Oscilloscope(data_reader, channels_len)
