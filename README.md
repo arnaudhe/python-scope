@@ -16,5 +16,5 @@ Graphical scope from serial or socket data using python
 
 ## Test
 
-`python test/udp_send.py`
-`python scope.py test/conf_exampe_udp.json`
+`python test/udp_triangle.py`
+`python scope.py test/conf_udp_triangle.json`
