@@ -1,5 +1,7 @@
 # python-scope
-Graphical scope from serial or socket data using python
+Graphical scope from serial or socket data using python. The settings are based on a json file.
+
+<img src="https://raw.githubusercontent.com/arnaudhe/python-scope/master/img/screenshot.png" width="500">
 
 ## Dependancies
 
