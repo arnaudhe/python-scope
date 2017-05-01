@@ -36,11 +36,11 @@ class DataReader(threading.Thread):
                     raise Exception("Bad input length")
             except Exception, e:
                 print "input data error"
-            
-            lock.acquire()
-            self.data = numpy.roll(self.data, -1, axis=0)
-            self.data[-1, :] = numpy.array(values).T
-            lock.release()
+            else:
+                lock.acquire()
+                self.data = numpy.roll(self.data, -1, axis=0)
+                self.data[-1, :] = numpy.array(values).T
+                lock.release()
 
         self.close()
 
@@ -73,7 +73,7 @@ class DataReaderSerial(DataReader):
         self.start()
 
     def read(self):
-        self.ser.readline()
+        return self.ser.readline()
 
     def close(self):
         print 'Serial closed'
@@ -112,26 +112,35 @@ class Oscilloscope():
     BLUE    = (0,   162, 232)
     GREEN   = (102, 177, 33)
 
+    FONT_COLOR             = (200, 200, 200)
+    GRID_COLOR             = (150, 150, 150)
+    BACKGROUND_LIGHT_COLOR = (50, 50, 50)
+    BACKGOURND_DARK_COLOR  = (20, 20, 20)
+
+    GRID_NB = 10
+ 
     colors  = [RED, BLUE, ORANGE, GREEN, RED, BLUE, ORANGE, GREEN, RED, BLUE, ORANGE, GREEN]
     
-    def __init__(self, data_reader, dimension):
-        self.screen      = pygame.display.set_mode((800, 600))
+    def __init__(self, data_reader, dimension, width, height, x_depth, y_min, y_max, channels_desc):
+        self.width       = width
+        self.height      = height
+        self.x_depth     = x_depth
+        self.y_min       = y_min
+        self.y_max       = y_max
+        self.screen      = pygame.display.set_mode((width, height))
         self.clock       = pygame.time.Clock()
         self.data_reader = data_reader
         self.dimension   = dimension
-        self.run()
+        self.chan_desc   = channels_desc
 
-    def generate_gradient(self, from_color, to_color, height, width):
-        channels = []
-        for channel in range(3):
-            from_value, to_value = from_color[channel], to_color[channel]
-            channels.append(
-                numpy.tile(
-                    numpy.linspace(from_value, to_value, width), [height, 1],
-                ),
-            )
-        return numpy.dstack(channels)
-        
+        try:
+            self.run()
+        except:
+            pygame.quit()
+            self.data_reader.stop()
+            sys.exit()
+
+
     def plot(self, x, y, xmin, xmax, ymin, ymax, color):
         w, h = self.screen.get_size()
         x = numpy.array(x)
@@ -145,31 +154,65 @@ class Oscilloscope():
         xp    = (x-xmin)*xsc
         yp    = h-(y-ymin)*ysc
 
-        font = pygame.font.Font(pygame.font.match_font(u'mono'), 16)
-        
-        #Draw grid
-        for i in range(10):
-            pygame.draw.line(self.screen, (150, 150, 150), (0,int(h*0.1*i)), (w-1,int(h*0.1*i)), 1)
-            self.screen.blit(font.render("{}".format(ymax - ((float)(ymax - ymin) * i) / 10), 1, (200, 200, 200)), (0,int(h*0.1*i)))
-            pygame.draw.line(self.screen, (150, 150, 150), (int(w*0.1*i),0), (int(w*0.1*i),h-1), 1)
-            self.screen.blit(font.render("{}".format(xmin + ((float)(xmax - xmin) * i) / 10), 1, (200, 200, 200)), (int(w*0.1*i),0))
-            
-        #Plot data
+        # Plot data
         for i in range(len(xp)-1):
             pygame.draw.line(self.screen, color, (int(xp[i]),   int(yp[i])), 
                                                  (int(xp[i+1]), int(yp[i+1])), 2)
 
+
+    def display_background(self):
+
+        self.screen.fill(self.BACKGOURND_DARK_COLOR)
+        self.gradient.update()
+
+
+    def display_grid(self, xmin, xmax, ymin, ymax):
+
+        w, h = self.screen.get_size()
+
+        # Draw grid
+        for i in range(self.GRID_NB):
+            pygame.draw.line(self.screen, self.GRID_COLOR, (0, int(h*0.1*i)), (w-1, int(h*0.1*i)), 1)
+            self.screen.blit(self.font.render("{}".format(ymax - ((float)(ymax - ymin) * i) / 10), 1, self.FONT_COLOR), (0, int(h*0.1*i)))
+            pygame.draw.line(self.screen, self.GRID_COLOR, (int(w*0.1*i), 0), (int(w*0.1*i), h-1), 1)
+            self.screen.blit(self.font.render("{}".format(xmin + ((float)(xmax - xmin) * i) / 10), 1, self.FONT_COLOR), (int(w*0.1*i), 0))
+
+
+    def display_channel(self, channel_num):
+
+        if not self.hold:
+            lock.acquire()
+            x = numpy.arange(self.x_depth)
+            y = self.data_reader.data[:, channel_num]
+            lock.release()
+        self.plot(x, y, 0, self.x_depth, self.y_min, self.y_max, self.colors[channel_num])
+
+
+    def display_fps(self):
+
+        text = self.font.render('{} fps'.format(int(self.clock.get_fps())), 1, self.FONT_COLOR)
+        self.screen.blit(text, (30, 30))
+
+
+    def display_channels_description(self):
+
+        for i in range(len(self.chan_desc)):
+            text = self.font.render(self.chan_desc[i], 1, self.colors[i])
+            self.screen.blit(text, (30, 60 + (i * 30)))
+
+
     def run(self):
         
-        #Things we need in the main loop
-        font = pygame.font.Font(pygame.font.match_font(u'mono'), 24)
-        data_buff_size = self.data_reader.data_buff_size        
-        hold = False
+        # Things we need in the main loop
+        self.hold = False
+
+        self.font = pygame.font.Font(None, 28)
 
         rect = pygame.Rect((0, 0), pygame.display.get_surface().get_size())
-        gradient = VerticalGradient(self.screen,rect,(50, 50, 50), (20, 20, 20), 400)
+        self.gradient = VerticalGradient(self.screen,rect, self.BACKGROUND_LIGHT_COLOR, self.BACKGOURND_DARK_COLOR, self.height)
 
         while 1:
+
             #Process events
             event = pygame.event.poll()
             if event.type == pygame.QUIT:
@@ -178,23 +221,18 @@ class Oscilloscope():
                 sys.exit()
             if event.type == pygame.KEYDOWN :
                 if event.key == pygame.K_h:
-                    hold = not hold
+                    self.hold = not self.hold
+            
+            self.display_background()
 
-            self.screen.fill((20,20,20))
-            gradient.update()
+            self.display_grid(0, self.x_depth, self.y_min, self.y_max)
 
-            # Plot current buffer
             for i in range(self.dimension):
-                if not hold:
-                    lock.acquire()
-                    x = numpy.arange(data_buff_size)
-                    y = self.data_reader.data[:, i]
-                    lock.release()
-                self.plot(x, y, 0, data_buff_size, 0, 10, self.colors[i])
+                self.display_channel(i)
 
-            # Display fps
-            text = font.render("%d fps"%self.clock.get_fps(), 1, (200, 200, 200))
-            self.screen.blit(text, (30, 30))
+            self.display_fps()
+
+            self.display_channels_description()
 
             pygame.display.flip()
             self.clock.tick(0)
@@ -211,13 +249,18 @@ with open(sys.argv[1], 'r') as config_file:
 data_source_type   = config['source']['type']
 data_source_params = config['source']['params']
 channels_len       = len(config['channels'])
-plot_depth         = config['plot']['depth']
+scope_x_depth      = config['scope']['x_depth']
+scope_width        = config['scope']['width']
+scope_height       = config['scope']['height']
+scope_y_min        = config['scope']['y_min']
+scope_y_max        = config['scope']['y_max']
+channels_desc      = ['{} ({})'.format(channel, config['channels'][channel]['unit']) for channel in config['channels']]
 
 if data_source_type == 'udp':
-    data_reader = DataReaderUdp(data_source_params['port'], channels_len, plot_depth)
+    data_reader = DataReaderUdp(data_source_params['port'], channels_len, scope_x_depth)
 elif data_source_type == 'serial':
-    data_reader = DataReaderUdp(data_source_params['port'], data_source_params['baudrate'], channels_len, plot_depth)
+    data_reader = DataReaderSerial(data_source_params['port'], data_source_params['baudrate'], channels_len, scope_x_depth)
 else:
     sys.exit("Unknown source type")
 
-osc = Oscilloscope(data_reader, channels_len)
+osc = Oscilloscope(data_reader, channels_len, scope_width, scope_height, scope_x_depth, scope_y_min, scope_y_max, channels_desc)

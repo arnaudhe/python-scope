@@ -17,4 +17,4 @@ while True:
     print "send " + message
     sock.sendto(message, (UDP_IP, UDP_PORT))
     count = (count + 1) % 10;
-    time.sleep(0.05)
+    time.sleep(0.1)

@@ -19,7 +19,11 @@
             "unit" : "su"
         }
     },
-    "plot" : {
-        "depth" : 50
+    "scope" : {
+        "width" : 1280,
+        "height" : 800,
+        "x_depth" : 50,
+        "y_min" : -0.5,
+        "y_max" : 10.5
     }
 }

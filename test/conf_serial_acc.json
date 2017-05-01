@@ -1,0 +1,27 @@
+{
+    "source" : {
+        "type" : "serial",
+        "params" : {
+            "port" : "/dev/tty.SLAB_USBtoUART",
+            "baudrate" : 115200
+        }
+    },
+    "channels" : {
+        "acc_x" : {
+            "unit" : "g" 
+        },
+        "acc_y" : {
+            "unit" : "g" 
+        },
+        "acc_z" : {
+            "unit" : "g"
+        }
+    },
+    "scope" : {
+        "width"   : 1280,
+        "height"  : 800,
+        "x_depth" : 200,
+        "y_min"   : -4.0,
+        "y_max"   : 4.0
+    }
+}
