@@ -6,6 +6,8 @@ import traceback
 import socket
 import threading
 import pygame
+import subprocess
+import re
 
 from pygame.locals import *
 
@@ -16,31 +18,33 @@ class DataReader(threading.Thread):
 
     stop_thread = threading.Event()
 
-    def __init__(self, dimension, depth = 1000):
+    def __init__(self, dimension, regex, depth = 1000):
         threading.Thread.__init__(self)                     # Call constructor of parent
         self.data_buff_size = depth                         # Buffer size
         self.dimension = dimension
+        self.regex = regex
         self.data = numpy.zeros((self.data_buff_size, self.dimension))   # Data buffer
 
     def run(self):
-
-        val = 0                                         # Read value
-        
         while not self.stop_thread.isSet() :
             data = self.read()                          # Read incoming data
-            try:
-                values = data.split(';')
-                if (len(values) == self.dimension):
-                    values = [float(i) for i in values]
+            if re.match(self.regex, data) != None:
+                try:
+                    values = re.match(self.regex, data).group(1).split(';')
+                    if (len(values) == self.dimension):
+                        values = [float(i) for i in values]
+                    else:
+                        raise Exception("Bad input length")
+                except Exception as e:
+                    print "Data input error"
+                    print e
                 else:
-                    raise Exception("Bad input length")
-            except Exception, e:
-                print "input data error"
+                    lock.acquire()
+                    self.data = numpy.roll(self.data, -1, axis=0)
+                    self.data[-1, :] = numpy.array(values).T
+                    lock.release()
             else:
-                lock.acquire()
-                self.data = numpy.roll(self.data, -1, axis=0)
-                self.data[-1, :] = numpy.array(values).T
-                lock.release()
+                print 'Data input does not match regex'
 
         self.close()
 
@@ -49,8 +53,8 @@ class DataReader(threading.Thread):
 
 class DataReaderUdp(DataReader):
 
-    def __init__(self, port, dimension, depth = 1000):
-        super(DataReaderUdp, self).__init__(dimension, depth)
+    def __init__(self, port, dimension, regex, depth = 1000):
+        super(DataReaderUdp, self).__init__(dimension, regex, depth)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind(('', port))
         print 'Socket bound on port {}'.format(port)
@@ -66,8 +70,8 @@ class DataReaderUdp(DataReader):
 
 class DataReaderSerial(DataReader):
 
-    def __init__(self, port, baudrate, dimension, depth = 1000):
-        super(DataReaderSerial, self).__init__(dimension, depth)
+    def __init__(self, port, baudrate, dimension, regex, depth = 1000):
+        super(DataReaderSerial, self).__init__(dimension, regex, depth)
         self.ser = serial.Serial(port, baudrate)  # open serial port
         print 'Serial port {} opened'.format(port)
         self.start()
@@ -79,6 +83,20 @@ class DataReaderSerial(DataReader):
         print 'Serial closed'
         self.ser.close()
 
+class DataReaderProgramOutput(DataReader):
+
+    def __init__(self, command, args, dimension, regex, depth = 1000):
+        super(DataReaderProgramOutput, self).__init__(dimension, regex, depth)
+        self.proc = subprocess.Popen([command] + args, stdout=subprocess.PIPE)
+        print 'Started program {}'.format(command)
+        self.start()
+
+    def read(self):
+        return self.proc.stdout.readline()
+
+    def close(self):
+        print 'Process terminate'
+        self.proc.terminate()
 
 class VerticalGradient():
 
@@ -248,6 +266,12 @@ with open(sys.argv[1], 'r') as config_file:
 
 data_source_type   = config['source']['type']
 data_source_params = config['source']['params']
+
+if ('regex' in config['source']):
+    data_source_regex = config['source']['regex']
+else:
+    data_source_regex = "(.+)"
+
 channels_len       = len(config['channels'])
 scope_x_depth      = config['scope']['x_depth']
 scope_width        = config['scope']['width']
@@ -257,9 +281,11 @@ scope_y_max        = config['scope']['y_max']
 channels_desc      = ['{} ({})'.format(channel, config['channels'][channel]['unit']) for channel in config['channels']]
 
 if data_source_type == 'udp':
-    data_reader = DataReaderUdp(data_source_params['port'], channels_len, scope_x_depth)
+    data_reader = DataReaderUdp(data_source_params['port'], channels_len, data_source_regex, scope_x_depth)
 elif data_source_type == 'serial':
-    data_reader = DataReaderSerial(data_source_params['port'], data_source_params['baudrate'], channels_len, scope_x_depth)
+    data_reader = DataReaderSerial(data_source_params['port'], data_source_params['baudrate'], channels_len, data_source_regex, scope_x_depth)
+elif data_source_type == 'program_output':
+    data_reader = DataReaderProgramOutput(data_source_params['command'], data_source_params['args'], channels_len, data_source_regex, scope_x_depth)
 else:
     sys.exit("Unknown source type")
 

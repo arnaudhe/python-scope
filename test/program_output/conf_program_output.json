@@ -1,0 +1,24 @@
+{
+    "source" : {
+        "type" : "program_output",
+        "params" : {
+            "command" : "test/program_output/test",
+            "args" : []
+        }
+    },
+    "channels" : {
+        "triangle_1" : {
+            "unit" : "su" 
+        },
+        "triangle_2" : {
+            "unit" : "su" 
+        }
+    },
+    "scope" : {
+        "width" : 1280,
+        "height" : 800,
+        "x_depth" : 50,
+        "y_min" : -1.0,
+        "y_max" :  11.0
+    }
+}
