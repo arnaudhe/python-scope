@@ -254,38 +254,39 @@ class Oscilloscope():
             pygame.display.flip()
             self.clock.tick(0)
 
+if __name__ == '__main__':
 
-pygame.init()
+    pygame.init()
 
-if (len(sys.argv) < 2):
-    sys.exit('usage : python {} <config>'.format(sys.argv[0]))
+    if (len(sys.argv) < 2):
+        sys.exit('usage : python {} <config>'.format(sys.argv[0]))
 
-with open(sys.argv[1], 'r') as config_file:
-    config = json.loads(config_file.read())
+    with open(sys.argv[1], 'r') as config_file:
+        config = json.loads(config_file.read())
 
-data_source_type   = config['source']['type']
-data_source_params = config['source']['params']
+    data_source_type   = config['source']['type']
+    data_source_params = config['source']['params']
 
-if ('regex' in config['source']):
-    data_source_regex = config['source']['regex']
-else:
-    data_source_regex = "(.+)"
+    if ('regex' in config['source']):
+        data_source_regex = config['source']['regex']
+    else:
+        data_source_regex = "(.+)"
 
-channels_len       = len(config['channels'])
-scope_x_depth      = config['scope']['x_depth']
-scope_width        = config['scope']['width']
-scope_height       = config['scope']['height']
-scope_y_min        = config['scope']['y_min']
-scope_y_max        = config['scope']['y_max']
-channels_desc      = ['{} ({})'.format(channel, config['channels'][channel]['unit']) for channel in config['channels']]
+    channels_len       = len(config['channels'])
+    scope_x_depth      = config['scope']['x_depth']
+    scope_width        = config['scope']['width']
+    scope_height       = config['scope']['height']
+    scope_y_min        = config['scope']['y_min']
+    scope_y_max        = config['scope']['y_max']
+    channels_desc      = ['{} ({})'.format(channel, config['channels'][channel]['unit']) for channel in config['channels']]
 
-if data_source_type == 'udp':
-    data_reader = DataReaderUdp(data_source_params['port'], channels_len, data_source_regex, scope_x_depth)
-elif data_source_type == 'serial':
-    data_reader = DataReaderSerial(data_source_params['port'], data_source_params['baudrate'], channels_len, data_source_regex, scope_x_depth)
-elif data_source_type == 'program_output':
-    data_reader = DataReaderProgramOutput(data_source_params['command'], data_source_params['args'], channels_len, data_source_regex, scope_x_depth)
-else:
-    sys.exit("Unknown source type")
+    if data_source_type == 'udp':
+        data_reader = DataReaderUdp(data_source_params['port'], channels_len, data_source_regex, scope_x_depth)
+    elif data_source_type == 'serial':
+        data_reader = DataReaderSerial(data_source_params['port'], data_source_params['baudrate'], channels_len, data_source_regex, scope_x_depth)
+    elif data_source_type == 'program_output':
+        data_reader = DataReaderProgramOutput(data_source_params['command'], data_source_params['args'], channels_len, data_source_regex, scope_x_depth)
+    else:
+        sys.exit("Unknown source type")
 
-osc = Oscilloscope(data_reader, channels_len, scope_width, scope_height, scope_x_depth, scope_y_min, scope_y_max, channels_desc)
+    osc = Oscilloscope(data_reader, channels_len, scope_width, scope_height, scope_x_depth, scope_y_min, scope_y_max, channels_desc)
