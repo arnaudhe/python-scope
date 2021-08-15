@@ -2,7 +2,6 @@ import sys
 import numpy
 import serial
 import json
-import traceback
 import socket
 import threading
 import pygame
@@ -36,15 +35,15 @@ class DataReader(threading.Thread):
                     else:
                         raise Exception("Bad input length")
                 except Exception as e:
-                    print "Data input error"
-                    print e
+                    print("Data input error")
+                    print(e)
                 else:
                     lock.acquire()
                     self.data = numpy.roll(self.data, -1, axis=0)
                     self.data[-1, :] = numpy.array(values).T
                     lock.release()
             else:
-                print 'Data input does not match regex'
+                print('Data input does not match regex')
 
         self.close()
 
@@ -57,14 +56,14 @@ class DataReaderUdp(DataReader):
         super(DataReaderUdp, self).__init__(dimension, regex, depth)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind(('', port))
-        print 'Socket bound on port {}'.format(port)
+        print('Socket bound on port {}'.format(port))
         self.start()
 
     def read(self):
-        return self.sock.recv(1024)
+        return self.sock.recv(1024).decode('utf-8')
 
     def close(self):
-        print 'Socket closed'
+        print('Socket closed')
         self.sock.close()
 
 
@@ -73,14 +72,14 @@ class DataReaderSerial(DataReader):
     def __init__(self, port, baudrate, dimension, regex, depth = 1000):
         super(DataReaderSerial, self).__init__(dimension, regex, depth)
         self.ser = serial.Serial(port, baudrate)  # open serial port
-        print 'Serial port {} opened'.format(port)
+        print('Serial port {} opened'.format(port))
         self.start()
 
     def read(self):
         return self.ser.readline()
 
     def close(self):
-        print 'Serial closed'
+        print('Serial closed')
         self.ser.close()
 
 class DataReaderProgramOutput(DataReader):
@@ -88,14 +87,14 @@ class DataReaderProgramOutput(DataReader):
     def __init__(self, command, args, dimension, regex, depth = 1000):
         super(DataReaderProgramOutput, self).__init__(dimension, regex, depth)
         self.proc = subprocess.Popen([command] + args, stdout=subprocess.PIPE)
-        print 'Started program {}'.format(command)
+        print('Started program {}'.format(command))
         self.start()
 
     def read(self):
         return self.proc.stdout.readline()
 
     def close(self):
-        print 'Process terminate'
+        print('Process terminate')
         self.proc.terminate()
 
 class VerticalGradient():
