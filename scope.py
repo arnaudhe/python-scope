@@ -49,6 +49,7 @@ class DataReader(threading.Thread):
 
     def stop(self):
         self.stop_thread.set()
+        self.join()
 
 class DataReaderUdp(DataReader):
 
@@ -56,11 +57,16 @@ class DataReaderUdp(DataReader):
         super(DataReaderUdp, self).__init__(dimension, regex, depth)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind(('', port))
+        self.sock.settimeout(1.0)
         print('Socket bound on port {}'.format(port))
         self.start()
 
     def read(self):
-        return self.sock.recv(1024).decode('utf-8')
+        try:
+            data = self.sock.recv(1024).decode('utf-8')
+        except socket.timeout:
+            data = ''
+        return data
 
     def close(self):
         print('Socket closed')
@@ -71,7 +77,7 @@ class DataReaderSerial(DataReader):
 
     def __init__(self, port, baudrate, dimension, regex, depth = 1000):
         super(DataReaderSerial, self).__init__(dimension, regex, depth)
-        self.ser = serial.Serial(port, baudrate)  # open serial port
+        self.ser = serial.Serial(port, baudrate, timeout=1.0)  # open serial port
         print('Serial port {} opened'.format(port))
         self.start()
 
@@ -150,13 +156,13 @@ class Oscilloscope():
         self.dimension   = dimension
         self.chan_desc   = channels_desc
 
+    def start(self):
         try:
             self.run()
-        except:
-            pygame.quit()
-            self.data_reader.stop()
-            sys.exit()
-
+        except KeyboardInterrupt:
+            print('keybord interrupt')
+        pygame.quit()
+        self.data_reader.stop()
 
     def plot(self, x, y, xmin, xmax, ymin, ymax, color):
         w, h = self.screen.get_size()
@@ -219,7 +225,9 @@ class Oscilloscope():
 
 
     def run(self):
-        
+
+        running = True
+
         # Things we need in the main loop
         self.hold = False
 
@@ -228,14 +236,15 @@ class Oscilloscope():
         rect = pygame.Rect((0, 0), pygame.display.get_surface().get_size())
         self.gradient = VerticalGradient(self.screen,rect, self.BACKGROUND_LIGHT_COLOR, self.BACKGOURND_DARK_COLOR, self.height)
 
-        while 1:
+        while running:
 
-            #Process events
+            # Process events
             event = pygame.event.poll()
+
             if event.type == pygame.QUIT:
-                pygame.quit()
-                self.data_reader.stop()
-                sys.exit()
+                running = False
+                break
+
             if event.type == pygame.KEYDOWN :
                 if event.key == pygame.K_h:
                     self.hold = not self.hold
@@ -290,3 +299,4 @@ if __name__ == '__main__':
         sys.exit("Unknown source type")
 
     osc = Oscilloscope(data_reader, channels_len, scope_width, scope_height, scope_x_depth, scope_y_min, scope_y_max, channels_desc)
+    osc.start()
