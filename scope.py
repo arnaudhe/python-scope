@@ -27,24 +27,24 @@ class DataReader(threading.Thread):
     def run(self):
         while not self.stop_thread.isSet() :
             data = self.read()                          # Read incoming data
-            if re.match(self.regex, data) != None:
-                try:
-                    values = re.match(self.regex, data).group(1).split(';')
-                    if (len(values) == self.dimension):
-                        values = [float(i) for i in values]
+            if len(data):
+                if re.match(self.regex, data) != None:
+                    try:
+                        values = re.match(self.regex, data).group(1).split(';')
+                        if (len(values) == self.dimension):
+                            values = [float(i) for i in values]
+                        else:
+                            raise Exception("Bad input length")
+                    except Exception as e:
+                        print("Data input error")
+                        print(e)
                     else:
-                        raise Exception("Bad input length")
-                except Exception as e:
-                    print("Data input error")
-                    print(e)
+                        lock.acquire()
+                        self.data = numpy.roll(self.data, -1, axis=0)
+                        self.data[-1, :] = numpy.array(values).T
+                        lock.release()
                 else:
-                    lock.acquire()
-                    self.data = numpy.roll(self.data, -1, axis=0)
-                    self.data[-1, :] = numpy.array(values).T
-                    lock.release()
-            else:
-                print('Data input does not match regex')
-
+                    print('Data input does not match regex')
         self.close()
 
     def stop(self):
